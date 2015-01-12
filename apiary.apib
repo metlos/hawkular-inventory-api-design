@@ -125,7 +125,7 @@ Returns all feeds that rhq knows of.
             }
         ]
 
-## Type [/feeds/types/{id}]
+## Type [/feeds/types/{id}?cascade]
 Work with resource and data types.
 
 + Model (application/json)
@@ -154,6 +154,9 @@ Work with resource and data types.
 + Parameters
     
     + id (string) ... the ID of the resource type (url encoded).
+    + cascade (boolean, optional) ... applicable to the DELETE method. If true, all users
+        of the resource type will be deleted with it. This is quite dangerous given that
+        also other resource types might reference this one.
     
 ### Get a single type [GET]
 
@@ -162,10 +165,12 @@ Work with resource and data types.
     [Type][]
 
 ### Delete a single type [DELETE]
+Response either with a 204 Deleted HTTP status code or with 409 Conflict HTTP status code
+referencing the resources and other entities that are linked to the type in question.
 
 + Response 204
 
-+ Response 409 (application/hal+json)
++ Response 409 (application/halj+son)
     + Headers
     
             Link: <../../types/asdf>;rel="derivedType", <../../resources/asdf>;rel="instance"
