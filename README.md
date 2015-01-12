@@ -1,2 +1,2 @@
 # hawkular-inventory-api-design
-A repo for [Apiary Blueprint](http://hawkularinventory.appiary.io) of the Hawkular Inventory.
+A repo for [Apiary Blueprint](http://docs.hawkularinventory.apiary.io) of the Hawkular Inventory.
