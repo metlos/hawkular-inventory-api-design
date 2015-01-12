@@ -1,0 +1,224 @@
+
+## Discovery [/feeds/discovery]
+Receiving discovery reports. Note that this step is completely voluntary
+in the feed workflow and will be only performed by feeds capable of 
+discovery.
+
+### Send discovery report [POST]
+Sends the discovery report up to the server.
+
++ Request (application/json)
+
+        [
+            { //RHQ agent
+                "address" : "rhq://1234-abcd/PLATFORM/cpu1",
+                "name" : "CPU1",
+                "description" : "kachny",
+                "version" : null,
+                "dataDefs" : [
+                    {
+                        "id" : "rhq://1234-abcd/PLATFORM/cpu1/systemLoad",
+                        "type" : "rhq-type://platforms/CPU/systemLoad"
+                    }, 
+                    {
+                        "id" : "rhq://1234-abcd/PLATFORM/cpu1/userLoad",
+                        "type" : "rhq-type://platforms/CPU/userLoad"
+                    }
+                ]
+            },
+            { //Collectd Proxy - Collectd can either use the "true" hostname 
+              //as its host part of the identifier or it can be configured 
+              //to use a specific value for host.
+              //We can just use this value, because it is supposed to be 
+              //unique in the environment.
+              //Notice how collectd datum identifier is used to extract the
+              //agentID, resourceAddress and also resource name.
+              //
+              //The identifier has this form ([] denotes optional parts):
+              //host/plugin[-pluginInstance]/type[-typeInstance]
+              //we use this mapping:
+              //host = agentID
+              //plugin[-pluginInstance] = resourceAddress and name 
+              //(collectd "resources" are not hierarchical). 
+              //
+              //the type[-typeInstance] is not used for resource 
+              //identification because it is meant to identify the measured
+              //thing inside something that is designated by the 
+              //plugin[-pluginInstance] identifier.
+              //
+              //The type identifier is composed as follows:
+              //collectd-type://plugin/type-typeInstance
+              
+                "address" : "collectd://hostX/cpu-0",
+                "name" : "cpu-0",
+                "description" : null,
+                "version" : null,
+                "dataDefs" : [
+                    {
+                        "id" : "collectd://hostX/cpu-0/cpu-user",
+                        "type" : "collectd-type://cpu/cpu-user"
+                    },
+                    {
+                        "id" : "collectd://hostX/cpu-0/cpu-idle",
+                        "type" : "collectd-type://cpu/cpu-idle"
+                    }
+                ]
+            },
+            { //Kubernetes Proxy
+                "address" : "kubernetes://1234-abcd/pod/pod1",
+                "name" : "pod1",
+                "dataDefs" : [
+                    {
+                        "id" : "cadvisor://1234-abcd/pod/pod1/metric",
+                        "type" : "cadvisor-type://..."
+                    }
+                ]
+            },
+            { //Feed that doesn't understand resources, but somehow knows 
+              //the data types of the stuff it sends up. If it didn't know 
+              //even that - it can merely start pushing data and RHQ will 
+              //analyze it, represent it somehow in discovery queue (and 
+              //drop it, because the resource would not be in the 
+              //inventory).
+                "dataDefs" : [
+                    {
+                        "id" : "in-app-metric1",
+                        "type" : "custom-type:acme-property"
+                    },
+                ]
+            }
+        ]
+        
++ Response 201
+
+## Resource [/feeds/resources{?id,address,at}]
+Work with resources.
+
++ Model (application/json)
+
+        {
+            "id" : "9876-zyxw",
+            "name" : "cpu0",
+            "description" : null,
+            "version" : null,
+            "address" : "rhq://1234-abcd/PLATFORM/cpu0"
+            "metrics" : [
+                {
+                    "id" : "collectd://hostX/cpu-0/cpu-load",
+                    "type" : "collectd-type://cpu/cpu-load"
+                }
+            ],
+            "connection" : {
+                "username" : "kachnak",
+                "password" : "clear-text-ftw"
+            },
+            "connectionType" : "custom-type://username-and-password",
+            "configuration" : {
+                "frequency" : "100"
+            },
+            "configurationType" : 
+                "rhq-type://platforms/CPU/resourceConfiguration",
+            "operations" : [
+                {
+                    "id" : "rhq://1234-abcd/PLATFORM/cpu0/overclock",
+                    "type" : "rhq-type://platforms/CPU/overclock"
+                }
+            ]
+        }
+
++ Parameters
+    + id (optional, uuid, `123`) ... 
+        Resources are server side concept, so they have a server-side ID.
+        Either id or address is required to get a resource.
+    + address (optional, string, `rhq://agentX/PLATFORM/cpu1`) ...
+        The address of the resource in the agent-specific format.
+        Either id or address is required to get a resource.
+    + at (optional, long) ... work with the resource as defined at the time 
+        specified as a epoch timestamp.
+
+### Get a single resource [GET]
+
++ Response 200
+
+    [Resource][]
+ 
+### Delete a single resource [DELETE]
+Note that the resource is not deleted, it is merely flagged as such (in a 
+versioned manner). Also note that the `at` parameter isn't considered. Only 
+the "current" version of the resource can be deleted.
+
++ Response 204
+
+### Create a new resource [POST]
+This is going to create a new "synthetic" resource. This resource was not 
+suggested by any agent (agents do that via the `/discovery` endpoint). It 
+is created by the user of the API.
+
+Because the individual datapoints coming from the agent are addressable, we 
+can compose it from them.
+
+If either `id` or `address` parameter is specified, this is going to update 
+the definition of the resource (in a versioned manner). Otherwise a new 
+resource will be created.
+
+The `at` parameter isn't taken into account.
+
++ Request (application/json)
+
+        {
+            "name" : "custom-cpu",
+            "description" : "my own CPU resource",
+            "metrics" : [
+                {
+                    "id" : "collectd://hostX/cpu-0/cpu-load",
+                    "type" : "collectd-type://cpu/cpu-load"
+                }
+            ],
+            "connection" : {
+                "username" : "kachnak",
+                "password" : "clear-text-ftw"
+            },
+            "connectionType" : "custom-type://username-and-password",
+            "configuration" : {
+                "frequency" : "100"
+            },
+            "configurationType" : 
+                "rhq-type://platforms/CPU/resourceConfiguration",
+            "operations" : [
+                {
+                    "id" : "rhq://1234-abcd/PLATFORM/cpu0/overclock",
+                    "type" : "rhq-type://platforms/CPU/overclock"
+                }
+            ]
+        }
+        
++ Response 201
+
+    [Resource][]
+
+## Data [/feeds/data]
+The data coming to the number of endpoints under `/feeds/data` root are subject 
+to changing their IDs before redirecting them to their true destinations 
+(i.e. metrics going to hawkula-rmetrics) or dropping them altogether if the 
+system determines that the data belongs to a resource that has not been 
+inventoried yet.
+
+### Metrics [/feeds/data/metrics]
+Metrics endpoint. This is identical to RHQ metrics.
+
+### Configurations [/feeds/data/configurations]
+
+### Connections [/feeds/data/connections]
+
+### Operations [/feeds/data/operations]
+
+# User
+The endpoints for normal user consumption. The user cannot feed data into
+the system (as feeds can) but can create resource views and associated
+new resource types.
+
+Group operations and querying is also available for the user.
+
+## Query [/query]
+The querying interface.
+
