@@ -3,7 +3,7 @@ FORMAT: 1A
 # Hawkular Inventory API
 This is a draft of the REST API of inventory in Hawkular.
 
-Nomenclature:
+**Nomenclature**
 
 * _Feed_ - source of data that sends data to the REST API defined here. The
 feed is assumed to have a number of implicit capabilities:
@@ -13,15 +13,19 @@ feed is assumed to have a number of implicit capabilities:
 Currently, the additional capabilities are the following (list is incomplete
 and evolving):
   * _metadata_ - the feed is able to define the metadata about the data it
-  sends
+    sends
   * _monitoring_ - the feed sends monitoring data
   * _configuration_ - the feed is able to send and receive configuration
   * _execution_ - the feed is able to execute operations on request
   * _scheduling_ - the feed is able to schedule its actions (montoring data
-  gathering, applying configuration, operation execution, ...)
+    gathering, applying configuration, operation execution, ...)
   * _discovery_ - the feed can scan for new stuff to report on. This is
-  somewhat implicit, but feeds declaring this capability can do so on
+    somewhat implicit, but feeds declaring this capability can do so on
   demand.
+  * _type-digest_ - instead of sending the whole resource/data type
+    definition to the endpoint, the feed can compute the digest of the type
+    according to the defined algorithm. Such digest can then be used to
+    reduce the amount of traffic.
 
 It is assumed that the connections between the feeds and the REST endpoint
 is always initiated by the feeds. If the feed wants to support receiving of
@@ -32,9 +36,198 @@ Authentification is not dealt with in this draft but it is assumed it would
 be handled externally/transparently to the API through Keycloak or other SSO
 provider. Authorization is also not dealt with.
 
-# Group Feed
+The API is split into 2 parts:
+* _/inflow/..._ - which is used solely by the feeds for data reporting
+* _/..._ - all other endpoints are meant for user consumption
 
-All things about feeds themselves - CRUD, registration, data types, data push.
+The two parts of the API are authenticated separately, possibly even using
+different authentication mechanisms.
+
+----
+
+**Identifiers**
+
+We have agreed that feeds need to be able to remember their assigned
+identity. Thus, the identity of the feed is a random UUID generated on the
+"server side".
+
+The data and resource types have more complex IDs. The structure is as
+follows:
+
+Resource types:
+```
+<origin>://[<feed-uuid>/]<name>/<version>
+```
+
+Data types:
+```
+<origin>://[<feed-uuid>/[/<resourceType>/<version>]]/<data-kind>/<name>
+```
+
+where
+
+* stuff in [ and ] is optional.
+* _origin_ - is either `feed` or `hawkular`. The `feed` origin signifies
+that the ID is assigned by the feeds themselves and are "local" to each
+individual feed. The `hakwular` origin means that the ID is assigned by the
+server and is globally unique amongst all the feeds.
+* _feed-uuid_ - the UUID identification assigned to the feed
+* _name_ - the name of the entity
+* _version_ - the version of the resource type as understood by the feed
+* _data-kind_ - the kind of the data. One of `metric`, `operation`, 
+`configuration`, `connection`.
+
+# Group Inflow
+This is the endpoint through which the data enters the Hawkular system.
+This is solely used by feeds and exposes mostly "append-only" interface.
+There is not much in the sense of delete operations because feeds don't
+usually need any such functionality.
+
+The rest of the API, which is user oriented, offers more traditional CRUD
+capabilities but functionally doesn't overlap with the _inflow_
+functionality. This is intentional and offers clear separation between data
+producers and data users.
+
+## Feeds [/inflow/feeds]
+Feed registration
+
++ Model (application/json)
+
+        {
+            "id" : "FEED_UUID1",
+            "capabilities" : ["monitoring", "configuration", "execution",
+              "scheduling", "discovery"]
+        }
+
+### Registration [POST]
+This is where the feeds register themselves.
+
+New feeds don't mention their ID and wait for the response from the endpoint
+that will contain the ID to use.
+
+If the feed claims to support metadata, the registration continues
+with registering the resource and data types the feed knows about (the
+202 HTTP response status + Link header).
+
+The server will not import any data into the inventory until it also knows
+its resource types.
+
++ Request (application/json)
+
+        {
+            "capabilities" : ["monitoring", "configuration", "execution",
+              "scheduling", "discovery"]
+        }
+
++ Response 201
+
+    [Feed][]
+
++ Request (application/json)
+
+        {
+            "capabilities" : ["metadata", "monitoring", "configuration",
+                "execution", "scheduling", "discovery"]
+        }
+
++ Response  202 (application/hal+json)
+
+    + Headers
+    
+            Link: <../types?feed=FEED_UUID2>;rel="next" 
+
+    + Body
+    
+            {
+                "id" : "FEED_UUID2",
+                "capabilities" : ["metadata", "monitoring",
+                "configuration", "execution", "scheduling", "discovery"]
+            }        
+
+## Types [/inflow/types?feed]
+Data and resource type registration.
+
++ Parameters
+
+    + feed (string) ... the ID of the feed that is registering the type
+   
+### Registration of a feed-local type [POST]
+
+If the registration of the resource or data type succeeds, the endpoint
+responds with a simple HTTP status code `204`.
+
+If the endpoint detects that there is already type with the same name but
+different structure, it will respond with the conflict HTTP status `409`.
+In such case the feed is supposed to use the type udate endpoint to move
+the type forward to a new version.
+
++ Request (application/json)
+
+        {
+            "id" : "feed://FEED_UUID1/__unassigned__/__unassigned__/metric/FunnyNumber",
+            "type" : "numeric",
+            "unit" : "percentage"
+        }
+
++ Response 204
+
++ Request (application/json)
+
+        {
+            "id" : "feed://FEED_UUID1/MyApp/1.0",
+            "metrics" : [
+                "load" : {
+                    "type" : "numeric",
+                    "unit" : "percentage"
+                }
+            ]
+        }
+
++ Response 204
+
++ Response 409
+
+    + Header
+        
+            Link: <update?feed=FEED_UUID1>;rel="update"
+
+### Registration of a global type [POST]
+`204` is used to report successful match.
+
+The `404` status code is returned in the case when the feed advertises to
+use a global resource type but the endpoint doesn't know such type.
+
+
++ Request (application/json)
+
+        {
+            "id" : "hawkular://Cpu/1.0"
+        }
+        
++ Response 204
+
++ Response 404
+
+## Data [/inflow/data?feed]
+
++ Parameters
+
+    + feed (string) ... the ID of the feed sending the data
+   
+### Resource details [POST]
+_**TODO**_
+
++ Request (application/json)
+        
+        {
+            
+        }
+        
++ Response 204
+
+# Group Feeds
+
+All things about feeds themselves.
 
 ## Feed [/feeds/{id}]
 
@@ -43,7 +236,7 @@ Information about and manipulation of a single feed.
 + Model (application/json)
 
         {
-            "id" : "UUID1",
+            "id" : "FEED_UUID1",
             "capabilities" : ["monitoring", "configuration", "execution",
               "scheduling", "discovery"]
         }
@@ -62,50 +255,7 @@ Information about and manipulation of a single feed.
 + Response 204
 
 ## Feeds [/feeds]
-Feed registration, etc.
-
-### Registration [POST]
-This is where the feeds register themselves.
-
-+ Request (application/json)
-
-        {
-            "id" : "suggested-unique-id", //this might or might not be 
-                                          //accepted by the rhq server
-            "capabilities" : ["monitoring", "configuration", "execution",
-              "scheduling", "discovery"]
-        }
-
-+ Response 201
-
-    [Feed][]
-
-+ Request (application/json)
-
-        {
-            "id" : "suggested-unique-id", //this might or might not be 
-                                          //accepted by the rhq server
-            "capabilities" : ["metadata", "monitoring", "configuration",
-                "execution", "scheduling", "discovery"]
-        }
-
-+ Response  202 (application/hal+json)
-The feed claims to support metadata. The registration therefore continues
-with registering the resource types the feed knows about.
-The server will not accept any data until the resource types are
-registered.
-
-    + Headers
-    
-            Link: <../types/register?feed=UUID2>;rel="next" 
-
-    + Body
-    
-            {
-                "id" : "UUID2",
-                "capabilities" : ["metadata", "monitoring",
-                "configuration", "execution", "scheduling", "discovery"]
-            }        
+**TODO** - querying support per endpoint or one `/query`?
 
 ### Feed Collection [GET]
 Returns all feeds that rhq knows of.
@@ -114,12 +264,12 @@ Returns all feeds that rhq knows of.
 
         [
             { 
-                "id" : "UUID1",
+                "id" : "FEED_UUID1",
                 "capabilities" : ["monitoring", "configuration", "execution",
                   "scheduling", "discovery"]
             },
             { 
-                "id" : "UUID2",
+                "id" : "FEED_UUID2",
                 "capabilities" : ["metadata", "monitoring", "configuration",
                     "execution", "scheduling", "discovery"]
             }
@@ -131,7 +281,7 @@ Work with resource and data types.
 + Model (application/json)
     
         {
-            "id" : "UUID/Cpu/1.0",
+            "id" : "feed://FEED_UUID/Cpu/1.0",
             "metrics" : [
                 {
                     "name" : "systemload",
@@ -157,7 +307,7 @@ Work with resource and data types.
     + cascade (boolean, optional) ... applicable to the DELETE method. If true, all users
         of the resource type will be deleted with it. This is quite dangerous given that
         also other resource types might reference this one.
-    
+
 ### Get a single type [GET]
 
 + Response 200
