@@ -102,7 +102,7 @@ Feed registration
 + Model (application/json)
 
         {
-            "id" : "FEED_UUID1",
+            "id" : "TENANT_ID1/ENV_ID1/FEED_UUID1",
             "capabilities" : ["monitoring", "configuration", "execution",
               "scheduling", "discovery"]
         }
@@ -112,6 +112,15 @@ This is where the feeds register themselves.
 
 New feeds don't mention their ID and wait for the response from the endpoint
 that will contain the ID to use.
+
+The feeds are supposed to know what tenant (e.g. `acme.org`, `redhat.com`)
+and environment (e.g. `dev`, `staging`, `production`) they are in though. If
+a feed doesn't know such information it will have to be placed behind a
+proxy feed that will supply such information on its behalf.
+
+The default tenant ID is `0` for installations with only a single tenant.
+The same goes for enviroment ID. The default is `0` for installations with
+only a single enviroment.
 
 If the feed claims to support metadata, the registration continues
 with registering the resource and data types the feed knows about (the
@@ -123,6 +132,8 @@ its resource types.
 + Request (application/json)
 
         {
+            "tenant" : "TENANT_ID1",
+            "environment" : "ENV_ID1",
             "capabilities" : ["monitoring", "configuration", "execution",
               "scheduling", "discovery"]
         }
@@ -134,6 +145,8 @@ its resource types.
 + Request (application/json)
 
         {
+            "tenant" : "TENANT_ID1",
+            "environment" : "ENV_ID1",
             "capabilities" : ["metadata", "monitoring", "configuration",
                 "execution", "scheduling", "discovery"]
         }
@@ -142,12 +155,12 @@ its resource types.
 
     + Headers
     
-            Link: <../types?feed=FEED_UUID2>;rel="next" 
+            Link: <../types?feed=TENANT_ID1/ENV_ID1/FEED_UUID2>;rel="next" 
 
     + Body
     
             {
-                "id" : "FEED_UUID2",
+                "id" : "TENANT_ID1/ENV_ID1/FEED_UUID2",
                 "capabilities" : ["metadata", "monitoring",
                 "configuration", "execution", "scheduling", "discovery"]
             }        
@@ -169,10 +182,13 @@ different structure, it will respond with the conflict HTTP status `409`.
 In such case the feed is supposed to use the type udate endpoint to move
 the type forward to a new version.
 
+If the feed doesn't want to supply a resource type and its version, it can
+use the default `0` for both.
+
 + Request (application/json)
 
         {
-            "id" : "feed://FEED_UUID1/__unassigned__/__unassigned__/metric/FunnyNumber",
+            "id" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/0/0/metric/FunnyNumber",
             "type" : "numeric",
             "unit" : "percentage"
         }
@@ -182,7 +198,7 @@ the type forward to a new version.
 + Request (application/json)
 
         {
-            "id" : "feed://FEED_UUID1/MyApp/1.0",
+            "id" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/MyApp/1.0",
             "metrics" : [
                 "load" : {
                     "type" : "numeric",
@@ -197,7 +213,7 @@ the type forward to a new version.
 
     + Header
         
-            Link: <update?feed=FEED_UUID1>;rel="update"
+            Link: <update?feed=TENANT_ID1/ENV_ID1/FEED_UUID1>;rel="update"
 
 ### Registration of a global type [POST]
 `204` is used to report successful match.
@@ -244,7 +260,7 @@ Information about and manipulation of a single feed.
 + Model (application/json)
 
         {
-            "id" : "FEED_UUID1",
+            "id" : "TENANT_ID1/ENV_ID1/FEED_UUID1",
             "capabilities" : ["monitoring", "configuration", "execution",
               "scheduling", "discovery"]
         }
@@ -272,12 +288,12 @@ Returns all feeds that rhq knows of.
 
         [
             { 
-                "id" : "FEED_UUID1",
+                "id" : "TENANT_ID1/ENV_ID1/FEED_UUID1",
                 "capabilities" : ["monitoring", "configuration", "execution",
                   "scheduling", "discovery"]
             },
             { 
-                "id" : "FEED_UUID2",
+                "id" : "TENANT_ID1/ENV_ID1/FEED_UUID2",
                 "capabilities" : ["metadata", "monitoring", "configuration",
                     "execution", "scheduling", "discovery"]
             }
@@ -289,7 +305,7 @@ Work with resource and data types.
 + Model (application/json)
     
         {
-            "id" : "feed://FEED_UUID/Cpu/1.0",
+            "id" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID/Cpu/1.0",
             "metrics" : [
                 {
                     "name" : "systemload",
