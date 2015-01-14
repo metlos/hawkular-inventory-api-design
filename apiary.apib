@@ -59,17 +59,25 @@ We have agreed that feeds need to be able to remember their assigned
 identity. Thus, the identity of the feed is a random UUID generated on the
 "server side".
 
+Because usually there are several deployment evironments (development,
+staging, production) and because Hawkular will support multitenancy, the
+feed ID is actually more complex than a simple UUID. To support easy
+migration between environments, the full feed ID has the form of:
+```
+TENANT_ID/ENVIRONMENT_ID/FEED_UUID
+```
+
 The data and resource types have more complex IDs. The structure is as
 follows:
 
 Resource types:
 ```
-<origin>://[<feed-uuid>/]<name>/<version>
+<origin>://[<feed-id>/]<name>/<version>
 ```
 
 Data types:
 ```
-<origin>://[<feed-uuid>/][/<resourceType>/<version>]/<data-kind>/<name>
+<origin>://[<feed-id>/][/<resourceType>/<version>]/<data-kind>/<name>
 ```
 
 where
@@ -84,6 +92,10 @@ server and is globally unique amongst all the feeds.
 * _version_ - the version of the resource type as understood by the feed
 * _data-kind_ - the kind of the data. One of `metric`, `operation`, 
 `configuration`, `connection`.
+
+The URIs with the `hawkular` origin will not have the `feed-id` part because
+the entities are global. The URIs with the `feed` origin have to specify
+the `feed-id` because they are local to the feeds.
 
 # Group Inflow
 This is the endpoint through which the data enters the Hawkular system.
@@ -110,8 +122,8 @@ Feed registration
 ### Registration [POST]
 This is where the feeds register themselves.
 
-New feeds don't mention their ID and wait for the response from the endpoint
-that will contain the ID to use.
+New feeds receive their ID from the endpoint and are required to remember it
+persistently.
 
 The feeds are supposed to know what tenant (e.g. `acme.org`, `redhat.com`)
 and environment (e.g. `dev`, `staging`, `production`) they are in though. If
