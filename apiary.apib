@@ -27,9 +27,12 @@ and evolving):
   * _execution_ - the feed is able to execute operations on request
   * _scheduling_ - the feed is able to schedule its actions (montoring data
     gathering, applying configuration, operation execution, ...)
-  * _discovery_ - the feed can scan for new stuff to report on. This is
-    somewhat implicit, but feeds declaring this capability can do so on
-  demand.
+  * _ignore_ - resource ignoring. By default the feeds are supposed to
+    report everything they know about all the time. This is the lowest
+    common denominator in terms of functionality. Feeds supporting _ignore_
+    can get instructions from the endpoint about what data they don't need
+    to report on to save on the resources the feeds consume on their
+    machines.
   * _type-digest_ - instead of sending the whole resource/data type
     definition to the endpoint, the feed can compute the digest of the type
     according to the defined algorithm. Such digest can then be used to
@@ -251,21 +254,94 @@ use a global resource type but the endpoint doesn't know such type.
     + feed (string) ... the ID of the feed sending the data
    
 ### Resource details [POST]
-_**TODO**_
+There is quite little that the feed can report on the resource itself.
+
+By default only three "special" attributes are supported: `name`, `type` and
+`relationships`.
+
+The name is supposed to be the default human readable name of the resource.
+
+The type is the type of the resource as understood by the feed. This is
+mandatory even for feeds that otherwise don't support resource types. Such
+feeds need to supply the default resource type and version `0` (e.g.
+`feed://TENANT_ID/ENV_ID/FEED_UUID/0/0`).
+
+The relationships define what relationships to other resources the resource
+in question has. In particular, one doesn't need to define the "parent"
+of the resource because the ID of the parent can be deduced from the ID of
+the resource itself by understanding it as a path.
+
+Other attributes on the resource are allowed and merely "stored".
 
 + Request (application/json)
         
-        {
-            
-        }
+        [
+            {
+                "id" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/EAP1/app.war",
+                "type" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/Eap/7.0/Webapp",
+                "name" : "Acme App",
+                "version" : "1.0.1",
+                "relationships" : {
+                    "uses" : [
+                        "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/EAP1/Datasource1",
+                        "..."
+                    ]
+                }
+            }
+        ]
         
 + Response 204
+
+### Monitoring and other data [POST]
+
++ Request (application/json)
+
+        [
+            {
+                "id" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/EAP1/app.war/metrics/pingTime",
+                "type" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/Eap/7.0/Webapp/metrics/pingTime",
+                "time" : 123456789,
+                "value" : 15
+            },
+            {
+                "id" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/EAP1/app.war/configuration",
+                "type" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/Eap/7.0/Webapp/configuration",
+                "time" : 123456789,
+                "value" : {
+                    "contextRoot" : "/app",
+                    "..." : "..."
+                }
+            }
+        ]
+
++ Response 202
+
+## Ignore list [/inflow/ignore?feed]
+Using this endpoint the feeds that support it can get information about
+the resources or data points they should ignore and not collect data on
+them.
+
+The feeds are supposed to periodically check this URL to get the up-to-date
+list of stuff to ignore.
+
++ Parameters
+
+    + feed (string) ... the feed ID
+    
+### Ignore list [GET]
+
++ Response (application/json)
+
+        [
+            "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/Platform/Cpu/1",
+            "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/MyApp/FunnyNumber"
+        ]
 
 # Group Feeds
 
 All things about feeds themselves.
 
-## Feed [/feeds/{id}]
+## Feed [/feeds/{id}?at]
 
 Information about and manipulation of a single feed.
 
@@ -280,6 +356,8 @@ Information about and manipulation of a single feed.
 + Parameters
 
     + id (required, string) ... the assigned ID of the feed.
+    + at (optional, timestamp) ... how did the feed look like at the
+                                   specified time instant.
 
 ### Get a single feed [GET]
 
@@ -290,8 +368,12 @@ Information about and manipulation of a single feed.
 ### Delete the feed from Hawkular along with everything it defines [DELETE]
 + Response 204
 
-## Feeds [/feeds]
-**TODO** - querying support per endpoint or one `/query`?
+## Feeds [/feeds?at]
+
++ Parameters
+
+    + at (timestamp, optional) ... what where the feeds at the specified
+                                   time instant.
 
 ### Feed Collection [GET]
 Returns all feeds that rhq knows of.
@@ -311,7 +393,11 @@ Returns all feeds that rhq knows of.
             }
         ]
 
-## Type [/feeds/types/{id}?cascade]
+# Group Types
+Unlike in RHQ, types in Hawkular are a dynamic thing with full CRUD-ability.
+
+
+## Type [/feeds/types/{id}?at&cascade]
 Work with resource and data types.
 
 + Model (application/json)
@@ -340,6 +426,8 @@ Work with resource and data types.
 + Parameters
     
     + id (string) ... the ID of the resource type (url encoded).
+    + at (timestamp) ... only applicable for GET - returns the type as it
+        looked like at the specified point in time.
     + cascade (boolean, optional) ... applicable to the DELETE method. If true, all users
         of the resource type will be deleted with it. This is quite dangerous given that
         also other resource types might reference this one.
@@ -350,13 +438,15 @@ Work with resource and data types.
     
     [Type][]
 
++ Response 404
+
 ### Delete a single type [DELETE]
 Response either with a 204 Deleted HTTP status code or with 409 Conflict HTTP status code
 referencing the resources and other entities that are linked to the type in question.
 
 + Response 204
 
-+ Response 409 (application/halj+son)
++ Response 409 (application/hal+json)
     + Headers
     
             Link: <../../types/asdf>;rel="derivedType", <../../resources/asdf>;rel="instance"
