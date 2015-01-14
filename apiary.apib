@@ -300,17 +300,29 @@ Other attributes on the resource are allowed and merely "stored".
             {
                 "id" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/EAP1/app.war/metrics/pingTime",
                 "type" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/Eap/7.0/Webapp/metrics/pingTime",
-                "time" : 123456789,
-                "value" : 15
+                "data" : [
+                    {
+                        "timestamp" : 123456789,
+                        "value" : 15
+                    },
+                    {
+                        "timestamp" : 123456799,
+                        "value" : 16
+                    }
+                ]
             },
             {
                 "id" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/EAP1/app.war/configuration",
                 "type" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/Eap/7.0/Webapp/configuration",
-                "time" : 123456789,
-                "value" : {
-                    "contextRoot" : "/app",
-                    "..." : "..."
-                }
+                "data" : [
+                    {
+                        "timestamp" : 123456789,
+                        "value" : {
+                            "contextRoot" : "/app",
+                            "..." : "..."
+                        }
+                    }
+                ]
             }
         ]
 
