@@ -67,20 +67,26 @@ staging, production) and because Hawkular will support multitenancy, the
 feed ID is actually more complex than a simple UUID. To support easy
 migration between environments, the full feed ID has the form of:
 ```
-TENANT_ID/ENVIRONMENT_ID/FEED_UUID
+ENVIRONMENT_ID/FEED_UUID
 ```
+
+and all IDs are always per-tenant. Thus to migrate feeds between
+environments all that is required is to reconfigure them to use a different
+environment id. The feed in the old environment can retain its FEED_UUID but
+because the environment id will differ between the old and new environment
+the two feeds will be distinguishable.
 
 The data and resource types have more complex IDs. The structure is as
 follows:
 
 Resource types:
 ```
-<origin>://[<feed-id>/]<name>/<version>
+<origin>://tenant-id/[<feed-id>/]<name>/<version>
 ```
 
 Data types:
 ```
-<origin>://[<feed-id>/][/<resourceType>/<version>]/<data-kind>/<name>
+<origin>://tenant-id/[<feed-id>/][/<resourceType>/<version>]/<data-kind>/<name>
 ```
 
 where
@@ -90,7 +96,8 @@ where
 that the ID is assigned by the feeds themselves and are "local" to each
 individual feed. The `hakwular` origin means that the ID is assigned by the
 server and is globally unique amongst all the feeds.
-* _feed-uuid_ - the UUID identification assigned to the feed
+* _tenant-id_ - the id of the tenant
+* _feed-id_ - the environment + feed uuid
 * _name_ - the name of the entity
 * _version_ - the version of the resource type as understood by the feed
 * _data-kind_ - the kind of the data. One of `metric`, `operation`, 
@@ -111,9 +118,13 @@ capabilities but functionally doesn't overlap with the _inflow_
 functionality. This is intentional and offers clear separation between data
 producers and data users.
 
-## Feeds [/inflow/feeds]
+## Feeds [/inflow/{tenant-id}/{environment-id}/feeds]
 Feed registration
 
++ Parameters
+    + tenant-id (string) ... the id of the tenant
+    + environment-id (string) ... the id of the environment
+    
 + Model (application/json)
 
         {
@@ -180,11 +191,13 @@ its resource types.
                 "configuration", "execution", "scheduling", "discovery"]
             }        
 
-## Types [/inflow/types?feed]
+## Types [/inflow/{tenant-id}/{environment-id}/types?feed]
 Data and resource type registration.
 
 + Parameters
 
+    + tenant-id (string) ... the id of the tenant
+    + environment-id (string) ... the id of the environment
     + feed (string) ... the ID of the feed that is registering the type
    
 ### Registration of a feed-local type [POST]
@@ -236,21 +249,26 @@ use the default `0` for both.
 The `404` status code is returned in the case when the feed advertises to
 use a global resource type but the endpoint doesn't know such type.
 
+The feed needs to register the global type to ensure that the server does
+know about it. This is different from the feed-originating types where the
+type does not need to be known to the server upfront.
 
 + Request (application/json)
 
         {
-            "id" : "hawkular://Cpu/1.0"
+            "id" : "hawkular://TENANT_ID/Cpu/1.0"
         }
         
 + Response 204
 
 + Response 404
 
-## Data [/inflow/data?feed]
+## Data [/inflow/{tenant-id}/{environment-id}/data?feed]
 
 + Parameters
 
+    + tenant-id (string) ... the id of the tenant
+    + environment-id (string) ... the id of the environment
     + feed (string) ... the ID of the feed sending the data
    
 ### Resource details [POST]
@@ -289,7 +307,7 @@ Other attributes on the resource are allowed and merely "stored".
                 }
             }
         ]
-        
+
 + Response 204
 
 ### Monitoring and other data [POST]
@@ -328,7 +346,7 @@ Other attributes on the resource are allowed and merely "stored".
 
 + Response 202
 
-## Ignore list [/inflow/ignore?feed]
+## Ignore list [/inflow/{tenant-id}/{environment-id}/ignore?feed]
 Using this endpoint the feeds that support it can get information about
 the resources or data points they should ignore and not collect data on
 them.
@@ -338,6 +356,8 @@ list of stuff to ignore.
 
 + Parameters
 
+    + tenant-id (string) ... the id of the tenant
+    + environment-id (string) ... the id of the environment
     + feed (string) ... the feed ID
     
 ### Ignore list [GET]
@@ -353,7 +373,7 @@ list of stuff to ignore.
 
 All things about feeds themselves.
 
-## Feed [/feeds/{id}?at]
+## Feed [/feeds/{tenant-id}/{environment-id}/{id}?at]
 
 Information about and manipulation of a single feed.
 
@@ -380,10 +400,12 @@ Information about and manipulation of a single feed.
 ### Delete the feed from Hawkular along with everything it defines [DELETE]
 + Response 204
 
-## Feeds [/feeds?at]
+## Feeds [/feeds/{tenant-id}/{environment-id}?at]
 
 + Parameters
 
+    + tenant-id (string) ... the id of the tenant
+    + environment-id (string) ... the id of the environment
     + at (timestamp, optional) ... what where the feeds at the specified
                                    time instant.
 
@@ -409,8 +431,19 @@ Returns all feeds that rhq knows of.
 Unlike in RHQ, types in Hawkular are a dynamic thing with full CRUD-ability.
 
 
-## Type [/feeds/types/{id}?at&cascade]
+## Type [/types/{tenant-id}/{environment-id}/{id}?at&cascade]
 Work with resource and data types.
+
++ Parameters
+    
+    + tenant-id (string) ... the id of the tenant
+    + environment-id (string) ... the id of the environment
+    + id (string) ... the ID of the resource type (url encoded).
+    + at (timestamp) ... only applicable for GET - returns the type as it
+        looked like at the specified point in time.
+    + cascade (boolean, optional) ... applicable to the DELETE method. If true, all users
+        of the resource type will be deleted with it. This is quite dangerous given that
+        also other resource types might reference this one.
 
 + Model (application/json)
     
@@ -434,15 +467,6 @@ Work with resource and data types.
                 "required" : ["id"]
             }
         }
-
-+ Parameters
-    
-    + id (string) ... the ID of the resource type (url encoded).
-    + at (timestamp) ... only applicable for GET - returns the type as it
-        looked like at the specified point in time.
-    + cascade (boolean, optional) ... applicable to the DELETE method. If true, all users
-        of the resource type will be deleted with it. This is quite dangerous given that
-        also other resource types might reference this one.
 
 ### Get a single type [GET]
 
@@ -469,3 +493,44 @@ referencing the resources and other entities that are linked to the type in ques
                 "error" : "Cannot delete resource type that is being used by other entities."
             }
         
+
+### Create a type [PUT]
+Only types with the `hawkular` origin can be created. Trying to create a
+type with the `feed` origin in their ID will result in an error.
+
++ Request (application/json)
+
+        {
+            "name" : "My Application",
+            "extends" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/App/1.0",
+            "parents" : [
+                "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/Eap/7.0"
+            ],
+            "metrics" : [
+                {
+                    "name" : "ordersPerMinute",
+                    "unit" : "none",
+                    "type" : "numeric"
+                }
+            ]
+        }
+
++ Response 202
+
+        {
+            "id" : "hawkular://TENANT_ID1/MyApp/1.1"
+            "name" : "My Application",
+            "extends" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/App/1.0"
+            "parents" : [
+                "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/Eap/7.0"
+            ],
+            "metrics" : [
+                {
+                    "name" : "ordersPerMinute",
+                    "unit" : "none",
+                    "type" : "numeric"
+                }
+            ]
+        }
+
++ Response 409         
