@@ -76,11 +76,18 @@ without any further post processing.
           thing about this guy.
 1. **U**: Oh yeah, my dumb feed. "name" is actually reported in KiBs
           (`PUT /metrics/name/meta`) and I want it to appear under
-          my "hot stuff" resource (`PUT /inventory/resources/hot%A20stuff)
+          my "hot stuff" resource (`PUT /inventory/resources/hot%A20stuff`).
 
-**Monitoring Feed**
+**Dumb Feed With Post-processing**
+Almost the same as above, only the disambiguity of the name is being solved
+by a simple middle-man proxy that translates the ambigous name coming from
+some feed into a unique name. This proxy might be our _ptranslator_ where
+translation would actually only modify the incoming datapoint which would
+already be in the metrics format.
 
-**Configuration Feed**
+**Resource Monitoring Feed**
+
+**Resource Configuration Feed**
 
 **Interacting Feed**
 
