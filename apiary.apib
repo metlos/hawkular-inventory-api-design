@@ -56,6 +56,36 @@ different authentication mechanisms.
 
 ----
 
+_**Stories**_
+
+Actors in the stories below: **F** the feed, **M** hawkular metrics, **I**
+hawkular inventory, **B** hawkular bus, **U** the user (human or scripted).
+
+**Dumb Feed**
+From the user point of view, the simplest approach. The "dumb feed" is
+a thing reporting monitoring data using just name value pairs. It doesn't
+provide any metadata. Also a number of "dumb feeds" on different machines
+might report using the same names, making the reporting possibly ambiguous
+without any further post processing.
+
+1. **F**: I send my first name=value pair to `POST /metrics`.
+1. **M**: oh, a new metric, stores it, sends notification to bus.
+1. **B**: To whom it may concern, a new metric called "name" has been
+          reported.
+1. **I**: Oh cool, let me put it in the discovery queue, I don't know a
+          thing about this guy.
+1. **U**: Oh yeah, my dumb feed. "name" is actually reported in KiBs
+          (`PUT /metrics/name/meta`) and I want it to appear under
+          my "hot stuff" resource (`PUT /inventory/resources/hot%A20stuff)
+
+**Monitoring Feed**
+
+**Configuration Feed**
+
+**Interacting Feed**
+
+----
+
 **Identifiers**
 
 We have agreed that feeds need to be able to remember their assigned
