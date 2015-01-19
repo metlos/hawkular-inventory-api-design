@@ -73,10 +73,11 @@ without any further post processing.
 1. **B**: To whom it may concern, a new metric called "name" has been
           reported.
 1. **I**: Oh cool, let me put it in the discovery queue, I don't know a
-          thing about this guy.
-1. **U**: Oh yeah, my dumb feed. "name" is actually reported in KiBs
-          (`PUT /metrics/name/meta`) and I want it to appear under
-          my "hot stuff" resource (`PUT /inventory/resources/hot%A20stuff`).
+          thing about this guy (also sends a message onto the bus).
+1. **U**: `GET /discovery`. Oh yeah, my dumb feed. "name" is actually
+          reported in KiBs (`PUT /metrics/name/meta`) and I want it to
+          appear under my "hot stuff" resource 
+          (`PUT /inventory/resources/hot%A20stuff`).
 
 **Dumb Feed With Post-processing**
 Almost the same as above, only the ambiguity of the name is being solved
@@ -86,10 +87,41 @@ translation would actually only modify the incoming datapoint which would
 already be in the metrics format.
 
 **Resource Monitoring Feed**
+Dumb feed above is the simplest possible monitoring feed. In here, we're
+supposing the feed also knows about resources. Knowing about resources kinda
+assumes knowledge of resource types.
 
-**Resource Configuration Feed**
+1. **F**: I know about EAP datasource, which is a thing that can be
+          configured such and such and I can report these things about it
+          (`POST /inventory/types`).
+1. **I**: k, let me store the type internally.
+1. **F**: sending config and metrics data `POST /metrics/numeric`,
+          `POST /metrics/availability`, `POST /metrics/structured` using
+          naming convention of hawkular inventory (Can but doesn't need to
+          put `hawkular-data-type-id` metadata attribute to metrics).
+1. **M**: oh, bunch of new metrics being defined and/or reported. Informing
+          over the bus.
+1. **B**: To whom it may concern, new metrics have been created.
+1. **I**: Yay, let me analyze the names and create the hierarchical
+          representation of resources based on it. Let me put it all to
+          discovery queue and notify over the bus. If the metrics also
+          contain the `hawkular-data-type-id` I can even assign types
+          to them straight away! If not, I'll wait for the user to assign
+          the types.
+1. **B**: new resources appeared in the discovery queue.          
+1. **U**: If `hawkular-data-type-id` is present: Magic!
+          If not: This resource has this type, thanks.
+   
 
 **Interacting Feed**
+
+**Create a Resource View**
+
+**Add a New Metric To a Resource View**
+
+**Define Relationship Between Resources**
+
+**View How a Resource Looked In The Past**
 
 ----
 
