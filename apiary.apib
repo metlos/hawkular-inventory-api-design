@@ -118,7 +118,7 @@ capabilities but functionally doesn't overlap with the _inflow_
 functionality. This is intentional and offers clear separation between data
 producers and data users.
 
-## Feeds [/inflow/{tenant-id}/{environment-id}/feeds]
+## Feeds [/{tenant-id}/{environment-id}/inflow/feeds]
 Feed registration
 
 + Parameters
@@ -191,7 +191,7 @@ its resource types.
                 "configuration", "execution", "scheduling", "discovery"]
             }        
 
-## Types [/inflow/{tenant-id}/{environment-id}/types?feed]
+## Types [/{tenant-id}/{environment-id}/inflow/types?feed]
 Data and resource type registration.
 
 + Parameters
@@ -263,7 +263,7 @@ type does not need to be known to the server upfront.
 
 + Response 404
 
-## Data [/inflow/{tenant-id}/{environment-id}/data?feed]
+## Data [/{tenant-id}/{environment-id}/inflow/data?feed]
 
 + Parameters
 
@@ -346,7 +346,7 @@ Other attributes on the resource are allowed and merely "stored".
 
 + Response 202
 
-## Ignore list [/inflow/{tenant-id}/{environment-id}/ignore?feed]
+## Ignore list [/{tenant-id}/{environment-id}/inflow/ignore?feed]
 Using this endpoint the feeds that support it can get information about
 the resources or data points they should ignore and not collect data on
 them.
@@ -373,7 +373,7 @@ list of stuff to ignore.
 
 All things about feeds themselves.
 
-## Feed [/feeds/{tenant-id}/{environment-id}/{id}?at]
+## Feed [/{tenant-id}/{environment-id}/feeds/{id}?at]
 
 Information about and manipulation of a single feed.
 
@@ -400,7 +400,7 @@ Information about and manipulation of a single feed.
 ### Delete the feed from Hawkular along with everything it defines [DELETE]
 + Response 204
 
-## Feeds [/feeds/{tenant-id}/{environment-id}?at]
+## Feeds [/{tenant-id}/{environment-id}/feeds?at]
 
 + Parameters
 
@@ -431,13 +431,13 @@ Returns all feeds that rhq knows of.
 Unlike in RHQ, types in Hawkular are a dynamic thing with full CRUD-ability.
 
 
-## Type [/types/{tenant-id}/{environment-id}/{id}?at&cascade]
-Work with resource and data types.
+## Type [/{tenant-id}/types/{id}?at&cascade]
+Work with resource and data types. Note that types are tenant-wide, unlike
+feeds that are environment-wide.
 
 + Parameters
     
     + tenant-id (string) ... the id of the tenant
-    + environment-id (string) ... the id of the environment
     + id (string) ... the ID of the resource type (url encoded).
     + at (timestamp) ... only applicable for GET - returns the type as it
         looked like at the specified point in time.
@@ -495,12 +495,23 @@ referencing the resources and other entities that are linked to the type in ques
         
 
 ### Create a type [PUT]
-Only types with the `hawkular` origin can be created. Trying to create a
-type with the `feed` origin in their ID will result in an error.
+Only types with the `hawkular` origin can be created.
+
+A successful creation will be responded to by `204`.
+
+A `409` conflict will be returned if the type already exists (in any
+version). For updating an existing type (basically creating a new version
+of it), one has to use a different type of request to this endpoint.
+
+The distinction between resource type creation and resource type update is
+important for keeping track of the evolution resource type. Because there
+can be multiple versions active, the resource type versioning can basically
+form a tree (consider the following progression of "releases": 1.0.0, 1.0.1,
+1.1.0, 1.0.2, 1.1.1).
 
 + Request (application/json)
 
-        {
+        {            
             "name" : "My Application",
             "extends" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/App/1.0",
             "parents" : [
@@ -511,26 +522,204 @@ type with the `feed` origin in their ID will result in an error.
                     "name" : "ordersPerMinute",
                     "unit" : "none",
                     "type" : "numeric"
-                }
-            ]
-        }
-
-+ Response 202
-
-        {
-            "id" : "hawkular://TENANT_ID1/MyApp/1.1"
-            "name" : "My Application",
-            "extends" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/App/1.0"
-            "parents" : [
-                "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/Eap/7.0"
-            ],
-            "metrics" : [
+                },
                 {
-                    "name" : "ordersPerMinute",
+                    "name" : "cancellationsPerMinute",
                     "unit" : "none",
+                    "type" : "numeric"
+                },
+                {
+                    "name" : "funnyNumber",
+                    "unit" : "KiB",
                     "type" : "numeric"
                 }
             ]
         }
 
-+ Response 409         
++ Response 204
+
++ Response 409
+
+        {
+            "error" : "Type already exists in version 1.0"
+        }
+
+### Modify Type [PUT]
+
++ Request (application/json)
+
+        {
+            "updates" : "hawkular://TENANT_ID1/MyApp/1.0",
+            "version" : "1.1",
+            "metrics" : {
+                "remove" : [
+                    "cancellationsPerMinute"
+                ],
+                "add" : [
+                    {
+                        "name" : "funnierNumber",
+                        "unit" : "jiffies",
+                        "type" : "numeric"
+                    }
+                ],
+                "modify" : [
+                    {
+                        "name" : "funnyNumber",
+                        "to" : {
+                            "name" : "reallyFunnyNumber",
+                            "unit" : "GiB",
+                            "type" : "numeric"
+                        }
+                    }
+                ]
+            }
+        }
+
++ Response 200 (application/hal+json)
+    
+
+    + Headers
+    
+            Link: <../MyApp/1.1>;rel="successor-version" 
+
+    + Body
+
+            {            
+                "id" : "hawkular://TENANT_ID1/MyApp/1.1",
+                "name" : "My Application",
+                "version" : "1.1",
+                "extends" : "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/App/1.0",
+                "parents" : [
+                    "feed://TENANT_ID1/ENV_ID1/FEED_UUID1/Eap/7.0"
+                ],
+                "metrics" : [
+                    {
+                        "name" : "ordersPerMinute",
+                        "unit" : "none",
+                        "type" : "numeric"
+                    },
+                    {
+                        "name" : "reallyFunnyNumber",
+                        "unit" : "GiB",
+                        "type" : "numeric"
+                    },
+                    {
+                        "name" : "funnierNumber",
+                        "unit" : "jiffies",
+                        "type" : "numeric"
+                    }
+                ]
+            }
+
+### Represent Type By Another [PUT]
+
++ Request (application/json)
+
+        {
+            "representBy" : "hawkular://TENANT_ID1/SomeApp/1.1"
+        }
+
++ Response 200 (application/hal+json)
+
+    + Headers
+            
+            Link : <../SomeApp/1.1>;rel="original"
+            
+    + Body
+            {
+                "id" : "hawkular://TENANT_ID1/MyApp/1.0",
+                "representedBy" : "hawkular://TENANT_ID1/SomeApp/1.1"
+            }
+
++ Response 409 (application/hal+json)
+
+    + Headers
+            
+            Link : <../SomeApp/1.1>;rel="original"
+            
+    + Body
+    
+            {
+                "error" : "types are incompatible"
+            }
+
+## Compare Types [/{tenant-id}/types/compare]
+
++ Parameters
+
+    tenant-id (string) ... the id of the tenant
+    
+### Compare Types [POST]
+
++ Request (application/json)
+
+        {
+            "first" : "hawkular://TENANT_ID1/MyApp/1.0",
+            "second" : "hawkular://TENANT_ID1/SomeApp/1.0"
+        }
+
++ Response (application/json)
+
+        {
+            
+            "name" : { 
+                "first" : "My Application", 
+                "second" : "Some Application"
+            },
+            "metrics" : {
+                "first" : [
+                    {
+                        "name" : "funnyNumber",
+                        "unit" : "KiB",
+                        "type" : "numeric"
+                    }
+                ],
+                "second" : [
+                    {
+                        "name" : "cancellationsPerMinute",
+                        "unit" : "none",
+                        "type" : "numeric"
+                    }
+                ],
+                "difference" : [
+                    {
+                        "first" : {
+                            "name" : "funnierNumber",
+                            "unit" : "jiffies",
+                            "type" : "numeric"
+                        },
+                        "second" : {
+                            "name" : "funnierNumber",
+                            "unit" : "kPa",
+                            "type" : "numeric"
+                        }
+                    }
+                ]
+            }
+        }
+
+# Group Data
+
+## Data Points
+
+### Get Numeric Metrics [/{tenant-id}/metrics/numeric]
+
+### Get Availability
+
+## Resources
+
+### Get Details
+
+### Set Details
+
+### Create Resource View
+
+### Delete Resource View
+
+### Update Resource View
+
+### Get Relationships
+
+### Update Relationships
+
+# Group Query
