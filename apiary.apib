@@ -114,14 +114,79 @@ assumes knowledge of resource types.
    
 
 **Interacting Feed**
+A feed that can be sent requests. It is assumed that only feed->server
+visibility is necessary and therefore a permanent connection needs to be
+opened between them - a web socket is the likely candidate.
+
+1. **F**: Opens a web socket to the server
+1. **F**: Send the resource types I know (`POST /inventory/types`)
+1. **I**: Good, I already know about those.
+1. **U**: Restart my server - `POST /inventory/execute`
+1. **I**: Ok, this is on the feed with this web socket open, let me send a
+          request
+1. **F**: OK, doing as requested, here are the results - sends them over WS.
+1. **I**: Let me audit this (sends a message onto the bus)
 
 **Create a Resource View**
+A resource view is a way of producing digested information from various
+other resources in the inventory. Using it, the user can get a succint view
+of stuff they are interested in.
+
+1. **U**: I want create a resource view from these 3 metrics. The first
+          one is the CPU utilization on this database machine, the other is
+          the requests per minute on this web application.
+          `POST /inventory/resources/views`
+1. **I**: Here you go.
 
 **Add a New Metric To a Resource View**
+Resource view can be modified freely. Each such modification creates a new
+version of the view. You can take a look at how the view itself looked in
+the past, which will reveal what "membership" changes have been made to it.
+This is not to be confused with the ability to look at how the data of the
+members looked in the past.
+
+1. **U**: I want also want to have a ping response time on the load balancer
+          added to the previous resource view, thanks. 
+          `PUT /inventory/resources/views/myView`
+1. **I**: Here you go.
 
 **Define Relationship Between Resources**
+The relationships can be formed between arbitrary entities, not just
+resources. They capture the directional relationship between them.
+
+There exists a default relationship between resources - `contains` - using
+which the tree hierarchy of feed-originating resources is established.
+
+1. **U**: Resource A is dependent on resource B because of my
+          esotheric business needs (the printouts from B are manually
+          entered into application A and stuff needs to match). I want to
+          make sure I capture that requirement. Btw. this relationship
+          existed since the dawn of time.
+          `PUT /inventory/resources/A/rels/depends` data include the B
+          resource and "from" timestamp. "To" is defaulted to the
+          end-of-time value.
+          
+1. **I**: Ok.          
+
+**Define an "Application"**
+Application is a grouping of other stuff. Thus, the application itself is
+modelled as a group and the membership is modelled using the `contains`
+relationship.
+
+1. **U**: Resource A and resource B together form an application C.
+          Create the application as a group - `POST /inventory/groups`, 
+          add the resources to it using a relationship `contains`
+          `POST /inventory/groups/C/rels/contains`.
+1. **I**: Ok.
 
 **View How a Resource Looked In The Past**
+In the past, the resource (view) might have contained different metrics,
+have had different relationships etc. This might be useful when analyzing
+a situation that happened in the past in a configuration that is no longer
+deployed.
+
+1. **U**: `GET /inventory/resources/A?at=2014-05-24%A2008:50`
+1. **I**: Here you go.
 
 ----
 
